@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>49数字筛选</title>
+<style>
+  :root {
+    --red-ball: linear-gradient(135deg, #ff6b6b 0%, #c0392b 100%);
+    --blue-ball: linear-gradient(135deg, #74b9ff 0%, #2980b9 100%);
+    --green-ball: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+    --neutral-bg: #f5f5f5;
+    --panel-bg: #fff;
+    --shadow: rgba(0,0,0,0.1);
+    --border: #ddd;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    font: 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    margin: 0; padding: 0.15rem;
+    background: var(--neutral-bg);
+    color: #222;
+  }
+  .container { max-width: 800px; margin: 0 auto; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-bg); box-shadow: 0 4px 12px var(--shadow); overflow: hidden; }
+  .section { background: var(--panel-bg); border-radius: 8px; padding: 0.25rem; margin-bottom: 0.3rem; box-shadow: 0 1px 2px var(--shadow); }
+  .group-btn-area { display: flex; flex-wrap: wrap; gap: 4px; }
+
+  /* 控制区合并 */
+  .controls-area { margin: 0.15rem 0; }
+  .group-row { margin-bottom: 0.25rem; display: flex; flex-wrap: wrap; gap: 2px; }
+  .btn-group {
+    border: none; border-radius: 6px;
+    min-width: 38px; min-height: 38px;
+    padding: 5px 8px;
+    font-size: 13px; font-weight: 500;
+    background: linear-gradient(180deg, #5a9cff 0%, #007aff 100%);
+    color: white;
+    cursor: pointer; transition: all 0.15s;
+    display: flex; align-items: center; justify-content: center;
+    user-select: none;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.2);
+  }
+  .btn-group:active { transform: scale(0.98); opacity: 0.9; box-shadow: inset 0 1px 3px rgba(0,0,0,0.2); }
+  /* 主题色分组 */
+  .group1.selected { background: #636e72; }
+  .group2.selected { background: #636e72; }
+  .group3.selected { background: #636e72; }
+  .group4.selected { background: #636e72; }
+  .group5.selected { background: #e17055; }
+  .group6.selected { background: #636e72; }
+  .group7.selected { background: #ddb; color: #333; } /* 仅用于背景标识，实际颜色由各自决定 */
+  .group7.selected[data-val="红波"] { background: #ffb8b8; }
+  .group7.selected[data-val="蓝波"] { background: #b8d4ff; }
+  .group7.selected[data-val="绿波"] { background: #b8f0b8; }
+  .group8.selected[data-val="红单"] { background: #ff6b6b; color: white; }
+  .group8.selected[data-val="红双"] { background: #ffb8b8; color: #333; }
+  .group8.selected[data-val="蓝单"] { background: #2980b9; color: white; }
+  .group8.selected[data-val="蓝双"] { background: #74b9ff; color: #333; }
+  .group8.selected[data-val="绿单"] { background: #27ae60; color: white; }
+  .group8.selected[data-val="绿双"] { background: #2ecc71; color: #333; }
+  .group9.selected { background: #636e72; color: white; }
+
+  /* 结果面板 */
+  .result-area { margin-top: 0.5rem; height: 180px; overflow-y: auto; }
+  .toolbar { display: flex; gap: 0.4rem; margin-bottom: 0.4rem; }
+  .toolbar button {
+    border: none; border-radius: 6px; padding: 0.4rem 0.8rem;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    background: #007aff; color: white;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+  }
+  .toolbar button.clear { background: #ff3b30; }
+  .balls { display: flex; flex-wrap: wrap; gap: 4px; }
+  .ball {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.85rem; color: white;
+    box-shadow: inset 0 -3px 6px rgba(0,0,0,0.35), 0 2px 4px rgba(0,0,0,0.2);
+    position: relative; overflow: hidden;
+  }
+  .ball::after {
+    content: ''; position: absolute; top: 3px; left: 3px;
+    width: 9px; height: 5px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.75), rgba(255,255,255,0.1));
+    border-radius: 50%;
+    transform: rotate(-30deg);
+  }
+  .ball.red { background: var(--red-ball); }
+  .ball.blue { background: var(--blue-ball); }
+  .ball.green { background: var(--green-ball); }
+
+  .empty { color: #999; font-style: italic; padding: 1rem 0; }
+
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.7); color: white; padding: 8px 16px; border-radius: 20px;
+    font-size: 14px; opacity: 0; pointer-events: none; transition: opacity 0.3s;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- 结果面板 -->
+  <div class="section result-area">
+    <div class="balls" id="resultBalls"></div>
+  </div>
+
+  <!-- 操作栏 -->
+  <div class="toolbar">
+    <button onclick="copyResult()">复制结果</button>
+    <button class="clear" onclick="clearAll()">清空</button>
+  </div>
+
+  <!-- 控制按钮区：所有组合并 -->
+  <div class="controls-area">
+    <div class="group-row" id="group1"></div>
+    <div class="group-row" id="group2"></div>
+    <div class="group-row" id="group3"></div>
+    <div class="group-row" id="group4"></div>
+    <div class="group-row" id="group5"></div>
+    <div class="group-row" id="group6"></div>
+    <div class="group-row" id="group7"></div>
+    <div class="group-row" id="group8"></div>
+    <div class="group-row" id="group9"></div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast">已复制✓</div>
+
+<script>
+// ============================================
+// 数据定义
+// ============================================
+const NUMBERS = Array.from({length: 49}, (_, i) => i + 1); // 1-49
+
+// 第7组：波颜色归属（固定）
+const WAVE_MAP = {
+  red: [1,2,7,8,12,13,18,19,23,24,29,30,34,35,40,45,46],
+  blue: [3,4,9,10,14,15,20,25,26,31,36,37,41,42,47,48],
+  green: [5,6,11,16,17,21,22,27,28,32,33,38,39,43,44,49]
+};
+
+// 第5组：生肖基数及生成函数
+const ZODIAC_BASES = {
+  '鼠': [7],
+  '牛': [6],
+  '虎': [5],
+  '兔': [4],
+  '龙': [3],
+  '蛇': [2],
+  '马': [1],
+  '羊': [12],
+  '猴': [11],
+  '鸡': [10],
+  '狗': [9],
+  '猪': [8]
+};
+function getZodiacSet(base) {
+  const nums = [];
+  for (let n = base; n <= 49; n += 12) nums.push(n);
+  return nums;
+}
+
+// 第6组：家禽/野兽具体数字
+const GROUP6_MAP = {
+  '家禽': [1,6,8,9,10,12],
+  '野兽': [2,3,4,5,7,11]
+};
+
+// 第1组：大/小
+const BIG_RANGE = (n) => n >= 25 && n <= 49;
+const SMALL_RANGE = (n) => n >= 1 && n <= 24;
+
+// 第2组：单/双
+const ODD = (n) => n % 2 === 1;
+const EVEN = (n) => n % 2 === 0;
+
+// 第3组：合单/合双
+function sumDigits(n) {
+  const s = n.toString().padStart(2, '0');
+  return parseInt(s[0], 10) + parseInt(s[1], 10);
+}
+const SUM_ODD = (n) => sumDigits(n) % 2 === 1; // 合单
+const SUM_EVEN = (n) => sumDigits(n) % 2 === 0; // 合双
+
+// 第4组：段
+const SEGMENTS = {
+  '一段': (n) => n >= 1 && n <= 7,
+  '二段': (n) => n >= 8 && n <= 14,
+  '三段': (n) => n >= 15 && n <= 21,
+  '四段': (n) => n >= 22 && n <= 28,
+  '五段': (n) => n >= 29 && n <= 35,
+  '六段': (n) => n >= 36 && n <= 42,
+  '七段': (n) => n >= 43 && n <= 49
+};
+
+// 第7组：波（多选）
+const GROUP7_OPTIONS = [
+  { label: '红波', val: '红波', sets: [new Set(WAVE_MAP.red)] },
+  { label: '蓝波', val: '蓝波', sets: [new Set(WAVE_MAP.blue)] },
+  { label: '绿波', val: '绿波', sets: [new Set(WAVE_MAP.green)] }
+];
+function getWaveColor(n) {
+  if (WAVE_MAP.red.includes(n)) return 'red';
+  if (WAVE_MAP.blue.includes(n)) return 'blue';
+  if (WAVE_MAP.green.includes(n)) return 'green';
+  return null;
+}
+
+// 第8组：波×单双（多选，依赖第7组）
+const GROUP8_OPTIONS = [
+  { label: '红单', val: '红单', predicate: (n) => WAVE_MAP.red.includes(n) && ODD(n) },
+  { label: '红双', val: '红双', predicate: (n) => WAVE_MAP.red.includes(n) && EVEN(n) },
+  { label: '蓝单', val: '蓝单', predicate: (n) => WAVE_MAP.blue.includes(n) && ODD(n) },
+  { label: '蓝双', val: '蓝双', predicate: (n) => WAVE_MAP.blue.includes(n) && EVEN(n) },
+  { label: '绿单', val: '绿单', predicate: (n) => WAVE_MAP.green.includes(n) && ODD(n) },
+  { label: '绿双', val: '绿双', predicate: (n) => WAVE_MAP.green.includes(n) && EVEN(n) }
+];
+
+// 第9组：大/小×单双（多选，依赖1、2组）
+const GROUP9_OPTIONS = [
+  { label: '小单', val: '小单', predicate: (n) => SMALL_RANGE(n) && ODD(n) },
+  { label: '小双', val: '小双', predicate: (n) => SMALL_RANGE(n) && EVEN(n) },
+  { label: '大单', val: '大单', predicate: (n) => BIG_RANGE(n) && ODD(n) },
+  { label: '大双', val: '大双', predicate: (n) => BIG_RANGE(n) && EVEN(n) }
+];
+
+// 组配置
+const GROUPS = [
+  { key: 'group1', title: '大/小', type: 'single', options: [
+    { label: '小', val: '小', predicate: SMALL_RANGE },
+    { label: '大', val: '大', predicate: BIG_RANGE }
+  ]},
+  { key: 'group2', title: '单/双', type: 'single', options: [
+    { label: '单', val: '单', predicate: ODD },
+    { label: '双', val: '双', predicate: EVEN }
+  ]},
+  { key: 'group3', title: '合单/合双', type: 'single', options: [
+    { label: '合单', val: '合单', predicate: SUM_ODD },
+    { label: '合双', val: '合双', predicate: SUM_EVEN }
+  ]},
+  { key: 'group4', title: '段', type: 'multi', options: Object.keys(SEGMENTS).map(k => ({ label: k, val: k, predicate: SEGMENTS[k] })) },
+  { key: 'group5', title: '生肖基数', type: 'multi', options: Object.keys(ZODIAC_BASES).map(k => ({
+    label: k, val: k, predicateSet: getZodiacSet(ZODIAC_BASES[k][0])
+  }))},
+  { key: 'group6', title: '家禽/野兽', type: 'single', options: [
+    { label: '家禽', val: '家禽', predicateSet: GROUP6_MAP['家禽'] },
+    { label: '野兽', val: '野兽', predicateSet: GROUP6_MAP['野兽'] }
+  ]},
+  { key: 'group7', title: '波', type: 'multi', options: GROUP7_OPTIONS },
+  { key: 'group8', title: '波×单双', type: 'multi', options: GROUP8_OPTIONS },
+  { key: 'group9', title: '大/小×单双', type: 'multi', options: GROUP9_OPTIONS }
+];
+
+// ============================================
+// 状态与初始化
+// ============================================
+const state = {};
+GROUPS.forEach(g => state[g.key] = g.type === 'single' ? null : []);
+
+function init() {
+  renderAllButtons();
+  computeAndRender();
+}
+
+// ============================================
+// 渲染按钮
+// ============================================
+function renderAllButtons() {
+  GROUPS.forEach(g => {
+    const container = document.getElementById(g.key);
+    container.innerHTML = '';
+    g.options.forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = `btn-group group${g.key.slice(-1)}`;
+      btn.dataset.key = g.key;
+      btn.dataset.val = opt.val;
+      btn.textContent = opt.label;
+      btn.onclick = () => handleButtonClick(g, opt);
+      container.appendChild(btn);
+    });
+  });
+}
+
+// ============================================
+// 点击处理
+// ============================================
+function handleButtonClick(group, option) {
+  const key = group.key;
+  const val = option.val;
+
+  if (group.type === 'single') {
+    // 单选：再次点击已选项则取消
+    if (state[key] === val) {
+      state[key] = null;
+    } else {
+      state[key] = val;
+    }
+  } else {
+    // 多选
+    const idx = state[key].indexOf(val);
+    if (idx > -1) {
+      state[key].splice(idx, 1);
+    } else {
+      state[key].push(val);
+    }
+  }
+
+  updateButtonStates();
+  computeAndRender();
+}
+
+function updateButtonStates() {
+  document.querySelectorAll('.btn-group').forEach(btn => {
+    const key = btn.dataset.key;
+    const val = btn.dataset.val;
+    const cur = state[key];
+    let selected = false;
+    if (Array.isArray(cur)) {
+      selected = cur.includes(val);
+    } else {
+      selected = cur === val;
+    }
+    btn.classList.toggle('selected', selected);
+  });
+}
+
+// ============================================
+// 核心筛选逻辑
+// ============================================
+function computeAndRender() {
+  // 检查是否有任何一组被激活（单选有值 或 多选非空）
+  const anyActive = GROUPS.some(g => {
+    const cur = state[g.key];
+    return cur !== null && !(Array.isArray(cur) && cur.length === 0);
+  });
+
+  // 如果没有激活任何条件，结果为空
+  if (!anyActive) {
+    renderBalls([]);
+    return;
+  }
+
+  const result = NUMBERS.filter(n => {
+    // 遍历每组条件，数字必须满足所有被激活的条件（AND）
+    for (const g of GROUPS) {
+      const cur = state[g.key];
+      if (cur === null || (Array.isArray(cur) && cur.length === 0)) {
+        // 该组未选择任何条件 -> 不约束（视为通过）
+        continue;
+      }
+
+      let passedGroup = false;
+      if (g.type === 'single') {
+        const opt = g.options.find(o => o.val === cur);
+        if (opt.predicate) passedGroup = opt.predicate(n);
+        else if (opt.predicateSet) passedGroup = opt.predicateSet.includes(n);
+      } else {
+        // 多选：满足任一选中条件即可通过该组
+        passedGroup = cur.some(v => {
+          const opt = g.options.find(o => o.val === v);
+          if (opt.predicate) return opt.predicate(n);
+          if (opt.predicateSet) return opt.predicateSet.includes(n);
+          return false;
+        });
+      }
+
+      if (!passedGroup) return false;
+    }
+    return true;
+  });
+
+  const sorted = [...result].sort((a,b)=>a-b);
+  renderBalls(sorted);
+}
+
+// ============================================
+// 渲染结果球
+// ============================================
+function renderBalls(nums) {
+  const container = document.getElementById('resultBalls');
+  container.innerHTML = '';
+  if (nums.length === 0) {
+    // 空时不显示任何内容
+    return;
+  }
+  nums.forEach(n => {
+    const color = getWaveColor(n) || ''; // red/blue/green
+    const ball = document.createElement('div');
+    ball.className = `ball ${color}`;
+    ball.textContent = n.toString().padStart(2, '0');
+    container.appendChild(ball);
+  });
+}
+
+// ============================================
+// 交互功能：复制、清空
+// ============================================
+function copyResult() {
+  const nums = [];
+  document.querySelectorAll('#resultBalls .ball').forEach(b => nums.push(b.textContent));
+  if (nums.length === 0) return;
+  const text = nums.join(',');
+  navigator.clipboard.writeText(text).then(() => showToast());
+}
+
+function showToast() {
+  const t = document.getElementById('toast');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function clearAll() {
+  GROUPS.forEach(g => {
+    state[g.key] = g.type === 'single' ? null : [];
+  });
+  updateButtonStates();
+  computeAndRender();
+}
+
+// 启动
+init();
+</script>
+</body>
+</html>
