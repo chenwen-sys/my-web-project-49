@@ -195,6 +195,7 @@
     <div class="section-label">数字</div>
     <div class="modal-body-numbers" id="modalNumberGrid"></div>
     <div class="modal-footer">
+      <button class="cancel" onclick="clearExcludeModal()">清除</button>
       <button class="cancel" onclick="closeExcludeModal()">取消</button>
       <button class="confirm" onclick="confirmExclude()">确定</button>
     </div>
@@ -237,11 +238,17 @@ function getZodiacSet(base) {
   return nums;
 }
 
-// 第6组：家禽/野兽具体数字
-const GROUP6_MAP = {
-  '家禽': [1,6,8,9,10,12],
-  '野兽': [2,3,4,5,7,11]
-};
+// 第6组：家禽/野兽具体数字（基于生肖基数分组）
+// 家禽：马、牛、羊、鸡、狗、猪 (25个)
+// 野兽：鼠、虎、兔、龙、蛇、猴 (24个)
+const GROUP6_OPTIONS = [
+  { label: '家禽', val: '家禽', predicateSet: [
+    1,6,8,9,10,12,13,18,20,21,22,24,25,30,32,33,34,36,37,42,44,45,46,48,49
+  ]},
+  { label: '野兽', val: '野兽', predicateSet: [
+    2,3,4,5,7,11,14,15,16,17,19,23,26,27,28,29,31,35,38,39,40,41,43,47
+  ]}
+];
 
 // 第1组：大/小
 const BIG_RANGE = (n) => n >= 25 && n <= 49;
@@ -319,10 +326,7 @@ const GROUPS = [
   { key: 'group5', title: '生肖基数', type: 'multi', options: Object.keys(ZODIAC_BASES).map(k => ({
     label: k, val: k, predicateSet: getZodiacSet(ZODIAC_BASES[k][0])
   }))},
-  { key: 'group6', title: '家禽/野兽', type: 'single', options: [
-    { label: '家禽', val: '家禽', predicateSet: GROUP6_MAP['家禽'] },
-    { label: '野兽', val: '野兽', predicateSet: GROUP6_MAP['野兽'] }
-  ]},
+  { key: 'group6', title: '家禽/野兽', type: 'single', options: GROUP6_OPTIONS },
   { key: 'group7', title: '波', type: 'multi', options: GROUP7_OPTIONS },
   { key: 'group8', title: '波×单双', type: 'multi', options: GROUP8_OPTIONS },
   { key: 'group9', title: '大/小×单双', type: 'multi', options: GROUP9_OPTIONS }
@@ -333,7 +337,9 @@ const GROUPS = [
 // ============================================
 const state = {};
 GROUPS.forEach(g => state[g.key] = g.type === 'single' ? null : []);
-const excludedSet = new Set(); // 被排除的号码
+const excludedSet = new Set(); // 已排除号码
+const modalZodiacSelected = new Set(); // 弹窗中选中的生肖
+const modalNumberSelected = new Set(); // 弹窗中选中的号码
 
 function init() {
   renderAllButtons();
@@ -407,13 +413,51 @@ function updateButtonStates() {
 // 排除弹窗逻辑
 // ============================================
 function openExcludeModal() {
+  // 基于当前 excludedSet 初始化选中状态
+  modalZodiacSelected.clear();
+  modalNumberSelected.clear();
+  Object.keys(ZODIAC_BASES).forEach(animal => {
+    const base = ZODIAC_BASES[animal][0];
+    const set = getZodiacSet(base);
+    // 如果整个生肖都已在排除中，则临时选中该生肖
+    if (set.every(n => excludedSet.has(n))) {
+      modalZodiacSelected.add(animal);
+    }
+    // 数字部分：只把已排除的号码作为临时选中（不作为“新选择”）
+    set.forEach(n => {
+      if (excludedSet.has(n)) modalNumberSelected.add(n);
+    });
+  });
+  // 数字区还要包括非生肖生成的1-49
+  for (let n = 1; n <= 49; n++) {
+    if (excludedSet.has(n) && !modalZodiacSelectedHasNumber(n)) {
+      modalNumberSelected.add(n);
+    }
+  }
   renderModalZodiac();
   renderModalNumbers();
   document.getElementById('excludeModal').classList.add('show');
 }
 
+function modalZodiacSelectedHasNumber(n) {
+  // 检查n是否属于当前modalZodiacSelected里任意一个生肖的集合
+  return Array.from(modalZodiacSelected).some(animal => {
+    const base = ZODIAC_BASES[animal][0];
+    return getZodiacSet(base).includes(n);
+  });
+}
+
 function closeExcludeModal() {
   document.getElementById('excludeModal').classList.remove('show');
+}
+
+function clearExcludeModal() {
+  // 仅清空临时选择，不动 excludedSet
+  modalZodiacSelected.clear();
+  modalNumberSelected.clear();
+  // 刷新弹窗内按钮状态
+  renderModalZodiac();
+  renderModalNumbers();
 }
 
 function renderModalZodiac() {
@@ -423,21 +467,15 @@ function renderModalZodiac() {
   zodiacKeys.forEach(animal => {
     const base = ZODIAC_BASES[animal][0];
     const btn = document.createElement('button');
-    const isExcluded = [...getZodiacSet(base)].some(n => excludedSet.has(n));
-    btn.className = 'modal-btn' + (isExcluded ? ' selected' : '');
+    btn.className = 'modal-btn' + (modalZodiacSelected.has(animal) ? ' selected' : '');
     btn.textContent = animal;
     btn.onclick = () => {
-      const set = getZodiacSet(base);
-      const allExcluded = set.every(n => excludedSet.has(n));
-      if (allExcluded) {
-        // 全部移除排除
-        set.forEach(n => excludedSet.delete(n));
+      if (modalZodiacSelected.has(animal)) {
+        modalZodiacSelected.delete(animal);
       } else {
-        // 全部加入排除
-        set.forEach(n => excludedSet.add(n));
+        modalZodiacSelected.add(animal);
       }
       renderModalZodiac();
-      renderModalNumbers();
     };
     grid.appendChild(btn);
   });
@@ -448,25 +486,61 @@ function renderModalNumbers() {
   grid.innerHTML = '';
   for (let n = 1; n <= 49; n++) {
     const btn = document.createElement('button');
-    btn.className = 'modal-btn' + (excludedSet.has(n) ? ' selected' : '');
+    btn.className = 'modal-btn' + (modalNumberSelected.has(n) ? ' selected' : '');
     btn.textContent = n.toString().padStart(2, '0');
-    btn.onclick = () => toggleModalNumber(n, btn);
+    btn.onclick = () => {
+      if (modalNumberSelected.has(n)) {
+        modalNumberSelected.delete(n);
+      } else {
+        modalNumberSelected.add(n);
+      }
+      renderModalNumbers();
+    };
     grid.appendChild(btn);
-  }
-}
-
-function toggleModalNumber(n, btn) {
-  if (excludedSet.has(n)) {
-    excludedSet.delete(n);
-    btn.classList.remove('selected');
-  } else {
-    excludedSet.add(n);
-    btn.classList.add('selected');
   }
 }
 
 function confirmExclude() {
   closeExcludeModal();
+  
+  // 1. 处理生肖：如果弹窗中未选中某个生肖，则从 excludedSet 中移除该生肖的所有号码
+  const allZodiacs = Object.keys(ZODIAC_BASES);
+  allZodiacs.forEach(animal => {
+    if (!modalZodiacSelected.has(animal)) {
+      const base = ZODIAC_BASES[animal][0];
+      getZodiacSet(base).forEach(n => excludedSet.delete(n));
+    }
+  });
+  
+  // 2. 加入通过生肖选中的号码
+  modalZodiacSelected.forEach(animal => {
+    const base = ZODIAC_BASES[animal][0];
+    getZodiacSet(base).forEach(n => excludedSet.add(n));
+  });
+  
+  // 3. 处理单独选择的数字：
+  //    - 如果已在之前排除且现在选中 -> 保留
+  //    - 如果之前排除但现在未选中 -> 移除
+  for (let n = 1; n <= 49; n++) {
+    // 检查n是否属于某个已选中的生肖（避免重复操作）
+    const inSelectedZodiac = Array.from(modalZodiacSelected).some(animal => {
+      const base = ZODIAC_BASES[animal][0];
+      return getZodiacSet(base).includes(n);
+    });
+    
+    if (inSelectedZodiac) continue; // 生肖已处理
+    
+    if (modalNumberSelected.has(n)) {
+      excludedSet.add(n);
+    } else {
+      excludedSet.delete(n);
+    }
+  }
+  
+  // 清空临时选择
+  modalZodiacSelected.clear();
+  modalNumberSelected.clear();
+  
   computeAndRender();
   renderExcludedPanel();
 }
@@ -546,6 +620,7 @@ function computeAndRender() {
           const opt = g.options.find(o => o.val === v);
           if (opt.predicate) return opt.predicate(n);
           if (opt.predicateSet) return opt.predicateSet.includes(n);
+          if (opt.sets) return opt.sets.some(s => s.has(n));
           return false;
         });
       }
@@ -574,6 +649,12 @@ function renderBalls(nums) {
     const ball = document.createElement('div');
     ball.className = `ball ${color}`;
     ball.textContent = n.toString().padStart(2, '0');
+    ball.title = '点击排除';
+    ball.onclick = () => {
+      excludedSet.add(n);
+      computeAndRender();
+      renderExcludedPanel();
+    };
     container.appendChild(ball);
   });
 }
